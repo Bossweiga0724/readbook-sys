@@ -14,6 +14,7 @@ interface ReaderProps {
 
 const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBack, onUpdateProgress }) => {
   const [currentChapterIdx, setCurrentChapterIdx] = useState(() => {
+    if (!book || !book.chapters || book.chapters.length === 0) return 0;
     const idx = book.chapters.findIndex(c => c.id === book.lastReadChapterId);
     return idx === -1 ? 0 : idx;
   });
@@ -27,13 +28,12 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [viewWidth, setViewWidth] = useState(window.innerWidth);
   
-  // 关键控制变量
   const [disableTransition, setDisableTransition] = useState(false);
   const shouldJumpToLastPage = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLDivElement>(null);
 
-  const chapter = book.chapters[currentChapterIdx];
+  const chapter = book?.chapters?.[currentChapterIdx];
   const theme = THEME_COLORS[settings.theme];
 
   useEffect(() => {
@@ -42,10 +42,8 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 统一处理章节切换后的定位逻辑（分页或滚动）
   useEffect(() => {
     const performJump = () => {
-      // 1. 水平分页模式
       if (settings.flipMode === PageFlipMode.HORIZONTAL && articleRef.current && containerRef.current) {
         const scrollWidth = articleRef.current.scrollWidth;
         const clientWidth = containerRef.current.clientWidth;
@@ -61,18 +59,16 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
           setCurrentPage(0);
         }
         
-        // 瞬间定位后，延迟恢复动画
         setTimeout(() => {
           setDisableTransition(false);
           shouldJumpToLastPage.current = false;
         }, 50);
       } 
-      // 2. 垂直滚动模式
       else if (settings.flipMode === PageFlipMode.SCROLL && containerRef.current) {
         if (shouldJumpToLastPage.current) {
           containerRef.current.scrollTo({
             top: containerRef.current.scrollHeight,
-            behavior: 'auto' // 使用 auto/instant 消除回滚动画
+            behavior: 'auto'
           });
         } else {
           containerRef.current.scrollTo({
@@ -86,14 +82,14 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
 
     const timer = setTimeout(performJump, 50);
     return () => clearTimeout(timer);
-  }, [currentChapterIdx, settings.fontSize, settings.fontFamily, settings.lineHeight, settings.flipMode, viewWidth]);
+  }, [currentChapterIdx, settings.fontSize, settings.fontFamily, settings.lineHeight, settings.flipMode, viewWidth, book?.id]);
 
   useEffect(() => {
     if (chapter) {
-      const progress = Math.round(((currentChapterIdx + 1) / book.chapters.length) * 100);
+      const progress = Math.round(((currentChapterIdx + 1) / (book?.chapters?.length || 1)) * 100);
       onUpdateProgress(chapter.id, progress);
     }
-  }, [currentChapterIdx, chapter?.id]);
+  }, [currentChapterIdx, chapter?.id, book?.chapters?.length]);
 
   const handlePrev = () => {
     if (settings.flipMode === PageFlipMode.HORIZONTAL) {
@@ -101,7 +97,7 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
         setDisableTransition(false);
         setCurrentPage(currentPage - 1);
       } else if (currentChapterIdx > 0) {
-        setDisableTransition(true); // 跨章禁用动画，防止回滚
+        setDisableTransition(true);
         shouldJumpToLastPage.current = true;
         setCurrentChapterIdx(currentChapterIdx - 1);
       }
@@ -118,13 +114,13 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
       if (currentPage < totalPages - 1) {
         setDisableTransition(false);
         setCurrentPage(currentPage + 1);
-      } else if (currentChapterIdx < book.chapters.length - 1) {
-        setDisableTransition(true); // 跨章禁用动画
+      } else if (currentChapterIdx < (book?.chapters?.length || 0) - 1) {
+        setDisableTransition(true);
         shouldJumpToLastPage.current = false;
         setCurrentChapterIdx(currentChapterIdx + 1);
       }
     } else {
-      if (currentChapterIdx < book.chapters.length - 1) {
+      if (currentChapterIdx < (book?.chapters?.length || 0) - 1) {
         shouldJumpToLastPage.current = false;
         setCurrentChapterIdx(currentChapterIdx + 1);
       }
@@ -164,10 +160,10 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
         <div className={`absolute left-0 top-0 bottom-0 w-[80%] max-w-sm ${theme.bg} ${theme.border} border-r shadow-2xl transition-transform duration-500 transform ${showTOC ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
           <div className="p-8 border-b border-gray-100 dark:border-gray-800 shrink-0">
             <h2 className="text-2xl font-black mb-1">目录</h2>
-            <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest truncate">{book.title}</p>
+            <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest truncate">{book?.title || '未知书名'}</p>
           </div>
           <div className="flex-1 overflow-y-auto py-4 scrollbar-hide">
-            {book.chapters.map((ch, idx) => (
+            {book?.chapters?.map((ch, idx) => (
               <button 
                 key={ch.id} 
                 onClick={() => jumpToChapter(idx)}
@@ -176,7 +172,7 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
                 <span className={`text-[10px] font-black w-6 ${currentChapterIdx === idx ? 'opacity-100' : 'opacity-30'}`}>{String(idx + 1).padStart(2, '0')}</span>
                 <span className="text-sm font-bold truncate">{ch.title}</span>
               </button>
-            ))}
+            )) || <div className="p-8 text-center text-gray-400">暂无目录</div>}
           </div>
         </div>
       </div>
@@ -187,16 +183,17 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
         <div className="flex-1 flex flex-col items-center px-4 overflow-hidden">
-          <h2 className="text-[9px] opacity-40 uppercase tracking-[0.2em] font-bold truncate w-full text-center">{book.title}</h2>
-          <p className="text-sm font-black truncate w-full text-center mt-0.5">{chapter?.title}</p>
+          <h2 className="text-[9px] opacity-40 uppercase tracking-[0.2em] font-bold truncate w-full text-center">{book?.title || '未知书籍'}</h2>
+          <p className="text-sm font-black truncate w-full text-center mt-0.5">{chapter?.title || '加载中...'}</p>
         </div>
         <div className="flex items-center gap-1">
            <button onClick={() => { setShowTOC(true); setShowControls(false); }} className="p-2.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-all">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
            </button>
            <button onClick={async () => {
+             if (!chapter) return;
              setIsSummarizing(true);
-             const res = await summarizeChapter(chapter.content);
+             const res = await summarizeChapter(chapter.content || '');
              setSummary(res);
              setIsSummarizing(false);
              setShowControls(false);
@@ -206,7 +203,7 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
         </div>
       </div>
 
-      {/* 正文容器 - 移除 scroll-smooth 类以确保 JS 瞬间跳转生效 */}
+      {/* 正文容器 */}
       <div 
         ref={containerRef}
         className={`flex-1 relative ${settings.flipMode === PageFlipMode.SCROLL ? 'overflow-y-auto' : 'overflow-hidden'}`}
@@ -246,22 +243,22 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
                  </button>
               </div>
             )}
-            <h1 className="text-3xl font-black mb-12 opacity-90 break-inside-avoid leading-tight">{chapter?.title}</h1>
+            <h1 className="text-3xl font-black mb-12 opacity-90 break-inside-avoid leading-tight">{chapter?.title || '加载中...'}</h1>
             <div className={`${settings.indent ? 'indent-[2em]' : ''} space-y-8 pb-20`}>
-              {chapter?.content.split('\n').filter(p => p.trim()).map((p, i) => (
+              {chapter?.content?.split('\n').filter(p => p.trim()).map((p, i) => (
                 <p key={i} className="mb-6">{p.trim()}</p>
-              ))}
+              )) || <div className="py-20 text-center text-gray-400 italic">章节内容加载中或为空...</div>}
             </div>
           </article>
         </div>
 
         {/* 进度指示 */}
         <div className="absolute bottom-6 left-0 right-0 flex justify-between px-10 text-[10px] font-bold opacity-30 pointer-events-none tracking-widest z-10">
-          <span className="truncate max-w-[120px]">{chapter?.title}</span>
+          <span className="truncate max-w-[120px]">{chapter?.title || '未知章节'}</span>
           {settings.flipMode === PageFlipMode.HORIZONTAL && (
             <span>{currentPage + 1} / {totalPages}</span>
           )}
-          <span>{Math.round(((currentChapterIdx + 1)/book.chapters.length)*100)}%</span>
+          <span>{Math.round(((currentChapterIdx + 1)/(book?.chapters?.length || 1))*100)}%</span>
         </div>
       </div>
 
@@ -273,7 +270,7 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
              <input 
                type="range" 
                min="0" 
-               max={book.chapters.length - 1} 
+               max={(book?.chapters?.length || 1) - 1} 
                value={currentChapterIdx} 
                onChange={(e) => jumpToChapter(parseInt(e.target.value))} 
                className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full appearance-none cursor-pointer accent-blue-500" 
@@ -307,7 +304,6 @@ const Reader: React.FC<ReaderProps> = ({ book, settings, onUpdateSettings, onBac
           </div>
           
           <div className="grid gap-10">
-            {/* 字体优化：增加对比度与可见度 */}
             <div className="space-y-4">
               <div className="flex justify-between items-end">
                 <p className="font-bold">正文字体</p>
