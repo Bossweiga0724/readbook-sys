@@ -25,10 +25,9 @@ const Discover: React.FC<DiscoverProps> = ({ onAddBook, existingBookTitles }) =>
   const [loading, setLoading] = useState(false);
   const [addingBook, setAddingBook] = useState<string | null>(null);
   
-  // 代理设置状态
   const [showProxySettings, setShowProxySettings] = useState(false);
   const [proxyPrefix, setProxyPrefix] = useState(() => 
-    localStorage.getItem('pureRead_proxy_prefix') || 'https://corsproxy.io/?'
+    localStorage.getItem('pureRead_proxy_prefix') || 'http://129.204.21.239:88/proxy?url='
   );
 
   useEffect(() => {
@@ -38,7 +37,6 @@ const Discover: React.FC<DiscoverProps> = ({ onAddBook, existingBookTitles }) =>
   const handleSaveProxy = () => {
     localStorage.setItem('pureRead_proxy_prefix', proxyPrefix);
     setShowProxySettings(false);
-    // 如果有选中的分类，重新触发加载
     if (selectedSource && currentCategory) {
       triggerLoad();
     }
@@ -98,15 +96,13 @@ const Discover: React.FC<DiscoverProps> = ({ onAddBook, existingBookTitles }) =>
           bookSourceUrl: s.bookSourceUrl || ''
         })).filter(s => s.bookSourceUrl);
         setSources(prev => {
-          const combined = [...prev, ...processedSources(newSources)];
+          const combined = [...prev, ...newSources];
           return combined.filter((v, i, a) => a.findIndex(t => t.bookSourceUrl === v.bookSourceUrl) === i);
         });
       } catch (err) { alert("JSON 格式错误"); }
     };
     reader.readAsText(file);
   };
-
-  const processedSources = (raw: any[]) => raw;
 
   const handleAddBook = async (item: any) => {
     if (!selectedSource || !item) return;
@@ -130,7 +126,7 @@ const Discover: React.FC<DiscoverProps> = ({ onAddBook, existingBookTitles }) =>
       };
       onAddBook(newBook);
     } catch (err) {
-      alert("内容获取失败，请检查网络设置或代理前缀");
+      alert("内容获取失败。请确保服务器 88 端口已放行，并正确配置了 Nginx /proxy 规则。");
     } finally {
       setAddingBook(null);
     }
@@ -143,7 +139,7 @@ const Discover: React.FC<DiscoverProps> = ({ onAddBook, existingBookTitles }) =>
           <h1 className="text-4xl font-black tracking-tight mb-2 bg-gradient-to-r from-blue-600 to-indigo-400 bg-clip-text text-transparent truncate">
             书源中心
           </h1>
-          <p className="text-gray-400 font-medium italic truncate">原生 Legado 解析引擎 · 跨域代理支持</p>
+          <p className="text-gray-400 font-medium italic truncate">私有服务器：129.204.21.239:88</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -162,30 +158,29 @@ const Discover: React.FC<DiscoverProps> = ({ onAddBook, existingBookTitles }) =>
         </div>
       </header>
 
-      {/* 代理设置弹窗 */}
       {showProxySettings && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setShowProxySettings(false)} />
           <div className="relative bg-white dark:bg-gray-900 w-full max-w-md rounded-[32px] p-8 shadow-2xl animate-in zoom-in-95">
-            <h2 className="text-2xl font-black mb-2">网络代理设置</h2>
-            <p className="text-sm text-gray-500 mb-6">为了绕过浏览器的跨域(CORS)限制，书籍抓取需要通过代理转发。您可以输入自己的 Nginx 代理地址。</p>
+            <h2 className="text-2xl font-black mb-2">反向代理设置</h2>
+            <p className="text-sm text-gray-500 mb-6 font-medium leading-relaxed">抓取外部书籍需要经过 Nginx 代理。请在 88 端口的 server 块内配置 <b>location /proxy</b> 规则。</p>
             
             <div className="space-y-4 mb-8">
               <label className="block">
-                <span className="text-xs font-black uppercase text-gray-400 mb-2 block">代理前缀 URL</span>
+                <span className="text-xs font-black uppercase text-gray-400 mb-2 block">代理地址 (前缀)</span>
                 <input 
                   type="text" 
                   className="w-full px-4 py-3.5 bg-gray-100 dark:bg-gray-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
-                  placeholder="例如: https://your-nginx.com/proxy?url="
+                  placeholder="例如: http://129.204.21.239:88/proxy?url="
                   value={proxyPrefix}
                   onChange={(e) => setProxyPrefix(e.target.value)}
                 />
               </label>
               
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => setProxyPrefix('https://corsproxy.io/?')} className="text-[10px] px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-blue-500/10 hover:text-blue-500 transition-all font-bold">使用 corsproxy.io</button>
-                <button onClick={() => setProxyPrefix('https://api.allorigins.win/raw?url=')} className="text-[10px] px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-blue-500/10 hover:text-blue-500 transition-all font-bold">使用 allorigins</button>
-                <button onClick={() => setProxyPrefix('')} className="text-[10px] px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-all font-bold">禁用代理(直接请求)</button>
+                <button onClick={() => setProxyPrefix('http://129.204.21.239:88/proxy?url=')} className="text-[10px] px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-bold shadow-md shadow-blue-500/20">默认私有服务器 (88端口/proxy)</button>
+                <button onClick={() => setProxyPrefix('https://corsproxy.io/?')} className="text-[10px] px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-blue-500/10 hover:text-blue-500 transition-all font-bold">使用公共代理</button>
+                <button onClick={() => setProxyPrefix('')} className="text-[10px] px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-all font-bold">禁用代理</button>
               </div>
             </div>
 
@@ -197,7 +192,6 @@ const Discover: React.FC<DiscoverProps> = ({ onAddBook, existingBookTitles }) =>
         </div>
       )}
 
-      {/* 剩余内容保持不变... */}
       <div className="mb-10">
         <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 px-1 opacity-60">本地书源库 ({sources.length})</h2>
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
@@ -310,7 +304,7 @@ const Discover: React.FC<DiscoverProps> = ({ onAddBook, existingBookTitles }) =>
             <div className="col-span-full py-20 flex flex-col items-center justify-center bg-gray-50 dark:bg-white/5 rounded-[40px] text-gray-400">
                <div className="w-20 h-20 mb-6 opacity-20"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg></div>
                <p className="text-xl font-black">未发现内容</p>
-               <p className="text-sm mt-2 opacity-60">可能是跨域拦截或规则需要更新，请尝试更换代理</p>
+               <p className="text-sm mt-2 opacity-60 font-bold">请确认服务器 Nginx 88 端口已放行入站流量</p>
             </div>
           )}
         </div>

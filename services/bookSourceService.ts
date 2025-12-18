@@ -7,21 +7,38 @@ import { BookSource, Book, Chapter } from "../types";
 export class LegadoParser {
   private domParser = new DOMParser();
   
-  // 默认代理前缀。用户可以在 UI 中修改并保存到 localStorage
-  // 常见的公开代理: 'https://corsproxy.io/?', 'https://api.allorigins.win/raw?url='
   private getProxyPrefix(): string {
-    return localStorage.getItem('pureRead_proxy_prefix') || 'https://corsproxy.io/?';
+    // 优先从缓存获取，默认指向 88 端口的 /proxy 路径
+    return localStorage.getItem('pureRead_proxy_prefix') || 'http://129.204.21.239:88/proxy?url=';
   }
 
+  /**
+   * 核心转换逻辑：将原始 URL 包装成代理 URL
+   */
   private getProxiedUrl(url: string): string {
     if (!url) return "";
-    // 如果是本地路径或已经包含了代理前缀，则不处理
+    
+    // 如果不是 http 开头的完整路径，可能是相对路径，暂不处理（交给 fetch 报错或 baseUrl 处理）
+    if (!url.startsWith('http')) return url;
+
     const prefix = this.getProxyPrefix();
-    if (url.startsWith('http') && !url.includes(window.location.hostname) && !url.startsWith(prefix)) {
-      // 某些代理要求直接拼接，某些要求 encode
-      return `${prefix}${encodeURIComponent(url)}`;
+    
+    // 如果没有配置代理，直接返回
+    if (!prefix) return url;
+
+    // 如果当前 URL 已经包含了代理前缀，则不再重复包装
+    if (url.startsWith(prefix)) return url;
+
+    // 智能处理前缀格式：确保 prefix 最终以 "url=" 结尾
+    let finalPrefix = prefix;
+    if (!prefix.includes('url=')) {
+      const connector = prefix.includes('?') ? '&url=' : '?url=';
+      finalPrefix = prefix + connector;
     }
-    return url;
+
+    const proxied = `${finalPrefix}${encodeURIComponent(url)}`;
+    console.log(`[Proxy Linker] Original: ${url} -> Proxied: ${proxied}`);
+    return proxied;
   }
 
   /**
@@ -30,10 +47,13 @@ export class LegadoParser {
   async fetchBookList(source: BookSource, url: string): Promise<any[]> {
     try {
       const proxiedUrl = this.getProxiedUrl(url);
-      console.log(`[Parser] Fetching list: ${url} via ${proxiedUrl}`);
+      console.log(`[Parser] Fetching list: ${proxiedUrl}`);
       
       const response = await fetch(proxiedUrl, {
-        headers: { 'Accept': 'text/html,application/xhtml+xml,application/xml' }
+        headers: { 
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
       });
       
       if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
@@ -54,7 +74,7 @@ export class LegadoParser {
         bookUrl: this.evaluateRule(item, rules.bookUrl, source.bookSourceUrl),
       }));
     } catch (error) {
-      console.error("本地解析书籍列表失败:", error);
+      console.error("解析书籍列表失败:", error);
       return [];
     }
   }
@@ -70,6 +90,7 @@ export class LegadoParser {
       const doc = this.domParser.parseFromString(html, 'text/html');
       
       const infoRules = source.ruleBookInfo;
+      // 这里的 tocUrl 如果是相对路径，会在 evaluateRule 中根据 bookUrl 转成绝对路径
       const tocUrl = infoRules?.tocUrl ? this.evaluateRule(doc, infoRules.tocUrl, bookUrl) : bookUrl;
 
       let tocDoc = doc;
@@ -83,7 +104,7 @@ export class LegadoParser {
       const tocRules = source.ruleToc;
       const chapterItems = this.queryElements(tocDoc, tocRules.chapterList);
       
-      // 限制前10章以保证加载速度
+      // 解析前10章预览
       const chapters: Chapter[] = await Promise.all(
         chapterItems.slice(0, 10).map(async (item, idx) => {
           const title = this.evaluateRule(item, tocRules.chapterName);
@@ -101,7 +122,7 @@ export class LegadoParser {
         description: infoRules ? this.evaluateRule(doc, infoRules.intro) : ""
       };
     } catch (error) {
-      console.error("本地解析详情失败:", error);
+      console.error("解析详情失败:", error);
       return { chapters: [] };
     }
   }
@@ -119,6 +140,9 @@ export class LegadoParser {
     }
   }
 
+  /**
+   * 规则求值核心逻辑：将相对路径转换为基于代理的绝对路径
+   */
   private evaluateRule(context: Element | Document, rule: string | undefined, baseUrl?: string): string {
     if (!rule) return "";
     const [mainRule, ...regexParts] = rule.split('##');
@@ -141,6 +165,7 @@ export class LegadoParser {
       else if (sourcePart === 'href') result = el.getAttribute('href') || "";
     }
 
+    // 正则处理
     if (regexParts.length > 0) {
       for (let i = 0; i < regexParts.length; i += 2) {
         const regexStr = regexParts[i];
@@ -151,6 +176,7 @@ export class LegadoParser {
       }
     }
 
+    // 绝对路径转换逻辑
     if (baseUrl && result && (sourcePart === 'href' || sourcePart === 'src' || rule.toLowerCase().includes('url'))) {
       try { result = new URL(result, baseUrl).href; } catch (e) {}
     }
