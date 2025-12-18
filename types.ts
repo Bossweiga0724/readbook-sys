@@ -7,8 +7,8 @@ export enum ThemeMode {
 }
 
 export enum PageFlipMode {
-  SCROLL = 'scroll',      // 上下滚动
-  HORIZONTAL = 'horizontal', // 左右平铺翻页
+  SCROLL = 'scroll',      
+  HORIZONTAL = 'horizontal', 
 }
 
 export interface ReadingSettings {
@@ -39,3 +39,5 @@ export interface Book {
   progress: number;
   lastReadChapterId?: string;
 }
+
+export type AppView = 'library' | 'reader' | 'discover';
