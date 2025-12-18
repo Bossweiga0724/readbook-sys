@@ -1,0 +1,7 @@
+{
+  "name": "PureRead - Minimalist E-Book Reader",
+  "description": "A high-performance, minimalist e-book reader focusing on pure reading experience with customizable typography, AI-powered TTS, and deep focus features.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
